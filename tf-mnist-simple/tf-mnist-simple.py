@@ -8,7 +8,7 @@ RUN_NAME = "4 layers [64,128,64] 0.6 dropOut, learning rate decay"
 LOGDIR = './tmp/{}/'.format(RUN_NAME)
 
 global_step = tf.Variable(0, trainable=False)
-starter_learning_rate = 0.015
+starter_learning_rate = 0.0015
 learning_rate = tf.train.exponential_decay(starter_learning_rate, global_step,
                                            300, 0.95, staircase=True)
 
