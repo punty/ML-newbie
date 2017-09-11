@@ -4,13 +4,13 @@ import tensorflow as tf
 from enum import Enum
 
 
-RUN_NAME = "LB"
+RUN_NAME = "LB - 512"
 LOGDIR = './tmp/{}/'.format(RUN_NAME)
 
 global_step = tf.Variable(0, trainable=False)
 starter_learning_rate = 0.001
 learning_rate = tf.train.exponential_decay(starter_learning_rate, global_step,
-                                           300, 0.96, staircase=True)
+                                           200, 0.96, staircase=True)
 num_empochs = 6000
 
 #placeholder data
@@ -85,11 +85,9 @@ mnist = input_data.read_data_sets("./MNIST_data/", one_hot=True)
 #Build Model
 
 model = NNModel(mnist.train.images.shape)
-model.appendLayer(NNLayerActivation.LINEAR_RELU,64)
-#model.appendLayer(NNLayerActivation.LINEAR_BATCH_RELU, 128)
-model.appendLayer(NNLayerActivation.LINEAR_BATCH_RELU,128)
-#model.appendLayer(NNLayerActivation.LINEAR_BATCH_RELU, 128)
-model.appendLayer(NNLayerActivation.LINEAR_RELU,32)
+model.appendLayer(NNLayerActivation.LINEAR_RELU,512)
+model.appendLayer(NNLayerActivation.LINEAR_DROPOUT,1024)
+model.appendLayer(NNLayerActivation.LINEAR_RELU,512)
 model.appendLayer(NNLayerActivation.LINEAR,10)
 
 
@@ -125,3 +123,27 @@ with tf.Session() as session:
             training_writer.add_summary(training_summary, epoch)
             test_writer.add_summary(test_summary, epoch)
             print("Epoch: {} - Training Acc: {}  Testing Acc: {}".format(epoch, acc_tr, acc_test))
+    model_builder = tf.saved_model.builder.SavedModelBuilder('exported_model')
+    inputs = {
+     'input': tf.saved_model.utils.build_tensor_info(X)
+    }
+
+    outputs = {
+        'output': tf.saved_model.utils.build_tensor_info(Y)
+    }
+
+    signature_def = tf.saved_model.signature_def_utils.build_signature_def(
+        inputs=inputs,
+        outputs=outputs,
+        method_name=tf.saved_model.signature_constants.PREDICT_METHOD_NAME
+    )
+
+    model_builder.add_meta_graph_and_variables(
+    session,
+    tags=[tf.saved_model.tag_constants.SERVING],
+    signature_def_map={
+        tf.saved_model.signature_constants.DEFAULT_SERVING_SIGNATURE_DEF_KEY: signature_def
+      }
+    )
+
+    model_builder.save()
