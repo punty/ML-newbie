@@ -4,21 +4,20 @@ import tensorflow as tf
 from enum import Enum
 
 
-RUN_NAME = "4 layers [64,128,64] 0.6 dropOut, learning rate decay"
+RUN_NAME = "LB"
 LOGDIR = './tmp/{}/'.format(RUN_NAME)
 
 global_step = tf.Variable(0, trainable=False)
-starter_learning_rate = 0.0015
+starter_learning_rate = 0.001
 learning_rate = tf.train.exponential_decay(starter_learning_rate, global_step,
-                                           300, 0.95, staircase=True)
-
+                                           300, 0.96, staircase=True)
 num_empochs = 6000
 
 #placeholder data
 X = tf.placeholder(tf.float32, [None, 784])
 Y = tf.placeholder(tf.float32, [None, 10])
 keep_prob = tf.placeholder(tf.float32)
-
+isTraing = tf.placeholder(tf.bool)
 
 class NNModel:
 
@@ -46,6 +45,7 @@ class NNLayerActivation(Enum):
     LINEAR_RELU = 1
     LINEAR = 2
     LINEAR_DROPOUT = 3
+    LINEAR_BATCH_RELU = 4
 
 class NNLayer:
 
@@ -59,7 +59,6 @@ class NNLayer:
         self.shape = [numberOfInputs,numberOfNodes]
 
     def compute_forward(self, X):
-        print(X.shape)
         with tf.variable_scope('layer_'+str(self.index)):
             W = tf.get_variable("W"+str(self.index),shape=self.shape,dtype=tf.float32,initializer = tf.contrib.layers.xavier_initializer())
             b = tf.get_variable("b"+str(self.index),shape=self.shape[1],dtype=tf.float32,initializer = tf.zeros_initializer())
@@ -68,12 +67,16 @@ class NNLayer:
             return A
 
     def activation(self, Z):
+        if self.type == NNLayerActivation.LINEAR_BATCH_RELU:
+            a = tf.contrib.layers.batch_norm(Z, center=False, scale=True,is_training=isTraing,scope='bn')
+            return tf.nn.relu(a)
         if self.type == NNLayerActivation.LINEAR_RELU:
             return tf.nn.relu(Z)
         if self.type == NNLayerActivation.LINEAR:
             return Z
         if self.type == NNLayerActivation.LINEAR_DROPOUT:
-            return tf.nn.dropout(Z,keep_prob)
+            a = tf.nn.dropout(Z,keep_prob)
+            return tf.nn.relu(a)
 
 
 from tensorflow.examples.tutorials.mnist import input_data
@@ -83,8 +86,10 @@ mnist = input_data.read_data_sets("./MNIST_data/", one_hot=True)
 
 model = NNModel(mnist.train.images.shape)
 model.appendLayer(NNLayerActivation.LINEAR_RELU,64)
-model.appendLayer(NNLayerActivation.LINEAR_DROPOUT,128)
-model.appendLayer(NNLayerActivation.LINEAR_RELU,64)
+#model.appendLayer(NNLayerActivation.LINEAR_BATCH_RELU, 128)
+model.appendLayer(NNLayerActivation.LINEAR_BATCH_RELU,128)
+#model.appendLayer(NNLayerActivation.LINEAR_BATCH_RELU, 128)
+model.appendLayer(NNLayerActivation.LINEAR_RELU,32)
 model.appendLayer(NNLayerActivation.LINEAR,10)
 
 
@@ -113,10 +118,10 @@ with tf.Session() as session:
     test_writer = tf.summary.FileWriter(LOGDIR + 'test', session.graph)
     for epoch in range (num_empochs):
         batch_xs, batch_ys = mnist.train.next_batch(100)
-        _ = session.run(train_step,feed_dict={X:batch_xs, Y:batch_ys, keep_prob:0.6})
+        _ = session.run(train_step,feed_dict={X:batch_xs, Y:batch_ys, keep_prob:0.6, isTraing: 1})
         if epoch % 10 == 0:
-            acc_tr,training_cost, training_summary = session.run([accuracy,cost, summary], feed_dict={X:mnist.train.images, Y:mnist.train.labels, keep_prob:1.0})
-            acc_test,test_cost, test_summary = session.run([accuracy,cost, summary], feed_dict={X: mnist.test.images, Y: mnist.test.labels, keep_prob:1.0})
+            acc_tr,training_cost, training_summary = session.run([accuracy,cost, summary], feed_dict={X:mnist.train.images, Y:mnist.train.labels, keep_prob:1.0, isTraing: 0})
+            acc_test,test_cost, test_summary = session.run([accuracy,cost, summary], feed_dict={X: mnist.test.images, Y: mnist.test.labels, keep_prob:1.0, isTraing: 0})
             training_writer.add_summary(training_summary, epoch)
             test_writer.add_summary(test_summary, epoch)
             print("Epoch: {} - Training Acc: {}  Testing Acc: {}".format(epoch, acc_tr, acc_test))
