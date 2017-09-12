@@ -68,8 +68,13 @@ class NNLayer:
 
     def activation(self, Z):
         if self.type == NNLayerActivation.LINEAR_BATCH_RELU:
-            a = tf.contrib.layers.batch_norm(Z, center=False, scale=True,is_training=isTraing,scope='bn')
-            return tf.nn.relu(a)
+            batch_mean2, batch_var2 = tf.nn.moments(Z, [0])
+            scale2 = tf.Variable(tf.ones(self.shape[1]))
+            beta2 = tf.Variable(tf.zeros(self.shape[1]))
+            BN2 = tf.nn.batch_normalization(Z, batch_mean2, batch_var2, beta2, scale2, 0.0001)
+            return tf.nn.relu(BN2)
+
+
         if self.type == NNLayerActivation.LINEAR_RELU:
             return tf.nn.relu(Z)
         if self.type == NNLayerActivation.LINEAR:
@@ -85,9 +90,10 @@ mnist = input_data.read_data_sets("./MNIST_data/", one_hot=True)
 #Build Model
 
 model = NNModel(mnist.train.images.shape)
-model.appendLayer(NNLayerActivation.LINEAR_RELU,512)
-model.appendLayer(NNLayerActivation.LINEAR_DROPOUT,1024)
-model.appendLayer(NNLayerActivation.LINEAR_RELU,512)
+model.appendLayer(NNLayerActivation.LINEAR_RELU,128)
+model.appendLayer(NNLayerActivation.LINEAR_DROPOUT,256)
+model.appendLayer(NNLayerActivation.LINEAR_BATCH_RELU,128)
+model.appendLayer(NNLayerActivation.LINEAR_RELU,128)
 model.appendLayer(NNLayerActivation.LINEAR,10)
 
 
@@ -143,7 +149,7 @@ with tf.Session() as session:
     tags=[tf.saved_model.tag_constants.SERVING],
     signature_def_map={
         tf.saved_model.signature_constants.DEFAULT_SERVING_SIGNATURE_DEF_KEY: signature_def
-      }
+        }
     )
 
     model_builder.save()
